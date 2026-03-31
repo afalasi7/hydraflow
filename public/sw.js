@@ -1,8 +1,16 @@
+const CACHE_KEY = "hydraflow-v2";
+
+function getBaseUrl() {
+  return new URL(self.registration.scope).pathname;
+}
+
 self.addEventListener("install", (event) => {
+  const baseUrl = getBaseUrl();
+
   self.skipWaiting();
   event.waitUntil(
-    caches.open("hydraflow-v1").then((cache) =>
-      cache.addAll(["/", "/manifest.webmanifest", "/favicon.svg"]),
+    caches.open(CACHE_KEY).then((cache) =>
+      cache.addAll([baseUrl, `${baseUrl}manifest.webmanifest`, `${baseUrl}favicon.svg`]),
     ),
   );
 });
@@ -10,15 +18,15 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(
-        keys.filter((key) => key !== "hydraflow-v1").map((key) => caches.delete(key)),
-      ),
+      Promise.all(keys.filter((key) => key !== CACHE_KEY).map((key) => caches.delete(key))),
     ),
   );
   self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
+  const baseUrl = getBaseUrl();
+
   if (event.request.method !== "GET") {
     return;
   }
@@ -32,10 +40,10 @@ self.addEventListener("fetch", (event) => {
       return fetch(event.request)
         .then((response) => {
           const clone = response.clone();
-          caches.open("hydraflow-v1").then((cache) => cache.put(event.request, clone));
+          caches.open(CACHE_KEY).then((cache) => cache.put(event.request, clone));
           return response;
         })
-        .catch(() => caches.match("/"));
+        .catch(() => caches.match(baseUrl));
     }),
   );
 });
