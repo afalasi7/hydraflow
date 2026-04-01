@@ -7,6 +7,8 @@ export type Screen = "today" | "history" | "settings";
 export type AuthMode = "landing" | "login" | "signup";
 export type GuardrailReason = "entry_limit" | "burst_limit";
 export type GuardrailResolution = "pending" | "approved" | "dismissed" | "expired";
+export type AuthProvider = "local" | "supabase";
+export type NotificationPermissionState = "default" | "granted" | "denied";
 
 export interface UserProfile {
   weight: number;
@@ -41,16 +43,33 @@ export interface FlaggedLoggingEvent {
   sourceType: SourceType;
 }
 
-export interface AccountRecord {
+export interface MemberProfileRecord {
   id: string;
   name: string;
-  email: string;
-  password: string;
   createdAt: string;
   profile: UserProfile | null;
   entries: HydrationLogEntry[];
   childLoggingPolicy?: ChildLoggingPolicy;
   flaggedEvents?: FlaggedLoggingEvent[];
+}
+
+export interface ReminderSettings {
+  enabled: boolean;
+  times: string[];
+  permission: NotificationPermissionState;
+}
+
+export interface AccountRecord {
+  id: string;
+  name: string;
+  email: string;
+  password?: string;
+  createdAt: string;
+  profiles: MemberProfileRecord[];
+  activeProfileId: string | null;
+  authProvider?: AuthProvider;
+  remoteUserId?: string | null;
+  reminderSettings?: ReminderSettings;
 }
 
 export interface PersistedState {
