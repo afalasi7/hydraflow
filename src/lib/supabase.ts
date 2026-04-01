@@ -5,6 +5,7 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() ?? "";
 const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() ?? "";
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ?? "";
 const supabaseClientKey = supabasePublishableKey || supabaseAnonKey;
+const supabaseAuthEnabled = import.meta.env.VITE_USE_SUPABASE_AUTH === "true";
 
 let client: ReturnType<typeof createClient> | null = null;
 
@@ -38,7 +39,7 @@ function sanitizeAccountForSync(account: AccountRecord): AccountRecord {
 }
 
 export function isSupabaseConfigured() {
-  return Boolean(supabaseUrl && supabaseClientKey);
+  return Boolean(supabaseAuthEnabled && supabaseUrl && supabaseClientKey);
 }
 
 export function subscribeToCloudAuthChanges(

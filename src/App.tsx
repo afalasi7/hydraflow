@@ -16,6 +16,13 @@ import {
   ozToMl,
 } from "./lib/hydration";
 import { downloadFamilyCsv, downloadProfileCsv } from "./lib/export";
+import {
+  loadServerSession,
+  saveServerAccount,
+  signInWithServer,
+  signOutServer,
+  signUpWithServer,
+} from "./lib/backend";
 import { clearAllState, loadState, persistAccounts } from "./lib/storage";
 import {
   getCloudSession,
@@ -464,6 +471,37 @@ export default function App() {
   }, [cloudAuthEnabled, currentAccount?.authProvider]);
 
   useEffect(() => {
+    if (cloudAuthEnabled) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void loadServerSession()
+      .then((data) => {
+        if (cancelled) {
+          return;
+        }
+
+        if (!data?.account) {
+          setCurrentUserId((current) => {
+            const account = loadState().accounts.find((item) => item.id === current);
+            return account?.authProvider === "local" ? null : current;
+          });
+          return;
+        }
+
+        setAccounts((current) => upsertAccount(current, data.account));
+        setCurrentUserId(data.account.id);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cloudAuthEnabled]);
+
+  useEffect(() => {
     if (!cloudAuthEnabled || !currentAccount?.remoteUserId || currentAccount.authProvider !== "supabase") {
       return;
     }
@@ -483,6 +521,37 @@ export default function App() {
           if (!cancelled) {
             setSyncState("error");
             setSyncError(error instanceof Error ? error.message : "Unable to sync this account.");
+          }
+        });
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [cloudAuthEnabled, currentAccount]);
+
+  useEffect(() => {
+    if (cloudAuthEnabled || currentAccount?.authProvider !== "local") {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setSyncState("syncing");
+      setSyncError("");
+
+      void saveServerAccount(currentAccount)
+        .then(({ account }) => {
+          if (!cancelled) {
+            replaceCurrentAccount(account);
+            setSyncState("synced");
+          }
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            setSyncState("error");
+            setSyncError(error instanceof Error ? error.message : "Unable to save this account.");
           }
         });
     }, 500);
@@ -669,7 +738,7 @@ export default function App() {
   }
 
   async function syncCurrentAccountNow() {
-    if (!currentAccount?.remoteUserId || currentAccount.authProvider !== "supabase") {
+    if (!currentAccount) {
       return;
     }
 
@@ -677,7 +746,12 @@ export default function App() {
     setSyncError("");
 
     try {
-      await saveRemoteAccount(currentAccount);
+      if (currentAccount.authProvider === "supabase") {
+        await saveRemoteAccount(currentAccount);
+      } else {
+        const { account } = await saveServerAccount(currentAccount);
+        replaceCurrentAccount(account);
+      }
       setSyncState("synced");
     } catch (error) {
       setSyncState("error");
@@ -689,6 +763,8 @@ export default function App() {
     clearAllState();
     if (cloudAuthEnabled) {
       void signOutCloud().catch(() => undefined);
+    } else {
+      void signOutServer().catch(() => undefined);
     }
     setAccounts([]);
     setCurrentUserId(null);
@@ -706,6 +782,8 @@ export default function App() {
   function signOut() {
     if (currentAccount?.authProvider === "supabase") {
       void signOutCloud().catch(() => undefined);
+    } else if (currentAccount?.authProvider === "local") {
+      void signOutServer().catch(() => undefined);
     }
     persistAccounts(accounts, null);
     setCurrentUserId(null);
@@ -776,18 +854,7 @@ export default function App() {
         return;
       }
 
-      if (accounts.some((account) => sanitizeEmail(account.email) === email)) {
-        setAuthError("That email is already registered. Try logging in instead.");
-        return;
-      }
-
-      const account = createAccountRecord({
-        id: `acct-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        name,
-        email,
-        password,
-        authProvider: "local",
-      });
+      const { account } = await signUpWithServer({ name, email, password });
 
       setAccounts((current) => upsertAccount(current, account));
       setCurrentUserId(account.id);
@@ -824,16 +891,9 @@ export default function App() {
         return;
       }
 
-      const match = loadState().accounts.find(
-        (account) => sanitizeEmail(account.email) === email && (account.password ?? "") === password,
-      );
-
-      if (!match) {
-        throw new Error("We could not match that email and password.");
-      }
-
-      persistAccounts(loadState().accounts, match.id);
-      setCurrentUserId(match.id);
+      const { account } = await signInWithServer({ email, password });
+      setAccounts((current) => upsertAccount(current, account));
+      setCurrentUserId(account.id);
       setAuthForm(initialAuthForm);
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Unable to log in.");
@@ -979,7 +1039,7 @@ export default function App() {
           <span className="eyebrow">Catch your flow</span>
           <h1>HydraFlow turns daily hydration into a futuristic ritual you actually want to keep.</h1>
           <p className="hero-copy">
-            Personalized targets, family-ready profiles, optional cloud sync, and a dashboard that keeps daily hydration
+            Personalized targets, family-ready profiles, backend-backed accounts, optional cloud sync, and a dashboard that keeps daily hydration
             obvious.
           </p>
           <div className="hero-actions">
@@ -1001,7 +1061,7 @@ export default function App() {
             </div>
             <div className="mini-card">
               <span>Sync path</span>
-              <strong>{cloudAuthEnabled ? "Supabase auth + cloud state" : "Local-first until cloud is configured"}</strong>
+              <strong>{cloudAuthEnabled ? "Supabase auth + cloud state" : "Backend auth + server-stored accounts"}</strong>
             </div>
             <div className="mini-card premium-mini-card">
               <span>Freemium</span>
@@ -1015,8 +1075,8 @@ export default function App() {
           <h2>Start outside the app, then step into a dashboard built for one person or a whole household.</h2>
           <ul className="feature-list">
             <li>Create an account and answer a short profile setup.</li>
-            <li>Track one profile for free, or unlock family mode for multiple profiles.</li>
-            <li>{cloudAuthEnabled ? "Cloud auth is live in this build for device sync." : "Add Supabase keys later to turn on cloud auth and sync."}</li>
+            <li>Track one profile or a whole household in the same account.</li>
+            <li>{cloudAuthEnabled ? "Cloud auth is live in this build for device sync." : "Accounts are stored by the built-in backend, and you can still add Supabase later for cloud sync."}</li>
           </ul>
         </div>
       </section>
@@ -1037,8 +1097,8 @@ export default function App() {
                 ? "This build can create cloud-backed accounts for sync across devices."
                 : "Log into your cloud-backed account to restore synced hydration data."
               : isSignup
-                ? "Create a local-first account and HydraFlow will shape a target for you."
-                : "Log in with your local account credentials to continue from this device."}
+                ? "Create a backend-backed account and HydraFlow will store it on the server for you."
+                : "Log in with your backend-backed account credentials to continue on this deployment."}
           </p>
         </div>
 
@@ -1048,7 +1108,7 @@ export default function App() {
               <span className="eyebrow">{isSignup ? "Sign Up" : "Log In"}</span>
               <h2>{isSignup ? "Create your account" : "Access your account"}</h2>
             </div>
-            <span className="subtle-note">{cloudAuthEnabled ? "Cloud auth enabled" : "Local-first mode"}</span>
+            <span className="subtle-note">{cloudAuthEnabled ? "Cloud auth enabled" : "Server-backed auth"}</span>
           </div>
 
           <div className="field-grid">
@@ -1489,10 +1549,10 @@ export default function App() {
                 <span>Family hub</span>
                 <strong>{profileCount} profiles on this account</strong>
               </div>
-              <div className="mini-card">
-                <span>Cloud sync</span>
-                <strong>{currentAccount?.authProvider === "supabase" ? "Connected to Supabase" : "Ready when cloud auth is configured"}</strong>
-              </div>
+                <div className="mini-card">
+                  <span>Cloud sync</span>
+                  <strong>{currentAccount?.authProvider === "supabase" ? "Connected to Supabase" : "Account stored by the built-in backend"}</strong>
+                </div>
               <div className="mini-card">
                 <span>Reminders</span>
                 <strong>{reminderSettings.enabled ? `${reminderSettings.times.length} browser nudges active` : "Ready for browser nudges"}</strong>
@@ -1837,31 +1897,33 @@ export default function App() {
             <div className="section-heading">
               <div>
                 <span className="eyebrow">Sync</span>
-                <h3>{cloudAuthEnabled ? "Cloud auth + sync path" : "Local-first mode"}</h3>
+                <h3>{cloudAuthEnabled ? "Cloud auth + sync path" : "Backend account storage"}</h3>
               </div>
-              <span className="subtle-note">{cloudAuthEnabled ? currentAccount.authProvider : "Offline-ready"}</span>
+              <span className="subtle-note">{cloudAuthEnabled ? currentAccount.authProvider : currentAccount.authProvider}</span>
             </div>
             <p>
               {cloudAuthEnabled
                 ? currentAccount.authProvider === "supabase"
                   ? "This account is connected to Supabase and can sync hydration state across devices."
                   : "Supabase is configured for this build, but this account is still local-only. Use cloud signup or login to sync new sessions."
-                : "Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable cloud auth and account syncing."}
+                : "This deployment stores account credentials and hydration state on the built-in backend. Add Supabase later only if you want multi-device cloud auth beyond this server."}
             </p>
-            {currentAccount.authProvider === "supabase" ? (
-              <div className="wizard-actions">
-                <button className="ghost-button" disabled={syncState === "syncing"} onClick={() => void syncCurrentAccountNow()} type="button">
-                  {syncState === "syncing" ? "Syncing..." : "Sync now"}
-                </button>
-                <span className="subtle-note">
-                  {syncState === "synced"
+            <div className="wizard-actions">
+              <button className="ghost-button" disabled={syncState === "syncing"} onClick={() => void syncCurrentAccountNow()} type="button">
+                {syncState === "syncing" ? "Saving..." : currentAccount.authProvider === "supabase" ? "Sync now" : "Save now"}
+              </button>
+              <span className="subtle-note">
+                {syncState === "synced"
+                  ? currentAccount.authProvider === "supabase"
                     ? "Cloud state is in sync."
-                    : syncState === "error"
-                      ? syncError || "Sync failed."
-                      : "Changes sync automatically after edits."}
-                </span>
-              </div>
-            ) : null}
+                    : "Server-backed account is saved."
+                  : syncState === "error"
+                    ? syncError || "Save failed."
+                    : currentAccount.authProvider === "supabase"
+                      ? "Changes sync automatically after edits."
+                      : "Changes save automatically after edits."}
+              </span>
+            </div>
           </div>
 
           <div className="sync-card glass-subpanel">
