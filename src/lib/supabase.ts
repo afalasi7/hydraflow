@@ -2,16 +2,31 @@ import { createClient } from "@supabase/supabase-js";
 import type { AccountRecord } from "../types";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() ?? "";
+const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() ?? "";
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ?? "";
+const supabaseClientKey = supabasePublishableKey || supabaseAnonKey;
 
 let client: ReturnType<typeof createClient> | null = null;
 
+function normalizeSupabaseError(error: unknown) {
+  if (
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    error.code === "PGRST205"
+  ) {
+    return new Error("Supabase is connected, but the HydraFlow table is missing. Run supabase/schema.sql in the Supabase SQL editor.");
+  }
+
+  return error instanceof Error ? error : new Error("Supabase request failed.");
+}
+
 function getClient() {
-  if (!supabaseUrl || !supabaseAnonKey) {
+  if (!supabaseUrl || !supabaseClientKey) {
     throw new Error("Supabase is not configured for this build.");
   }
 
-  client ??= createClient(supabaseUrl, supabaseAnonKey);
+  client ??= createClient(supabaseUrl, supabaseClientKey);
   return client;
 }
 
@@ -23,7 +38,13 @@ function sanitizeAccountForSync(account: AccountRecord): AccountRecord {
 }
 
 export function isSupabaseConfigured() {
-  return Boolean(supabaseUrl && supabaseAnonKey);
+  return Boolean(supabaseUrl && supabaseClientKey);
+}
+
+export function subscribeToCloudAuthChanges(
+  callback: Parameters<ReturnType<typeof getClient>["auth"]["onAuthStateChange"]>[0],
+) {
+  return getClient().auth.onAuthStateChange(callback);
 }
 
 export async function signUpWithCloud(email: string, password: string, name: string) {
@@ -58,7 +79,7 @@ export async function loadRemoteAccount(remoteUserId: string) {
     .maybeSingle();
 
   if (error) {
-    throw error;
+    throw normalizeSupabaseError(error);
   }
 
   if (!data || typeof data !== "object" || !("payload" in data)) {
@@ -80,6 +101,6 @@ export async function saveRemoteAccount(account: AccountRecord) {
   } as never);
 
   if (error) {
-    throw error;
+    throw normalizeSupabaseError(error);
   }
 }

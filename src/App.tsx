@@ -25,6 +25,7 @@ import {
   signInWithCloud,
   signOutCloud,
   signUpWithCloud,
+  subscribeToCloudAuthChanges,
 } from "./lib/supabase";
 import type {
   AccountRecord,
@@ -408,29 +409,59 @@ export default function App() {
   }, [activeProfile, lastReminderKey, reminderSettings.enabled, reminderSettings.permission, reminderSettings.times]);
 
   useEffect(() => {
-    if (!cloudAuthEnabled || currentUserId) {
+    if (!cloudAuthEnabled) {
       return;
     }
 
     let cancelled = false;
 
-    void getCloudSession()
-      .then(async ({ data, error }) => {
-        if (cancelled || error || !data.session?.user) {
-          return;
-        }
+    const syncSession = async () => {
+      const { data, error } = await getCloudSession();
+      if (cancelled || error) {
+        return;
+      }
 
+      if (data.session?.user) {
         const remoteUserId = data.session.user.id;
         const email = data.session.user.email ?? "";
         const fallbackName = String(data.session.user.user_metadata?.name ?? email.split("@")[0] ?? "HydraFlow User");
         await hydrateCloudAccount(remoteUserId, email, fallbackName);
-      })
-      .catch(() => undefined);
+        return;
+      }
+
+      if (currentAccount?.authProvider === "supabase") {
+        setCurrentUserId(null);
+      }
+    };
+
+    void syncSession().catch(() => undefined);
+
+    const { data } = subscribeToCloudAuthChanges(async (_event, session) => {
+      if (!session?.user) {
+        if (!cancelled) {
+          setCurrentUserId((current) => {
+            if (!current) {
+              return current;
+            }
+
+            const account = loadState().accounts.find((item) => item.id === current);
+            return account?.authProvider === "supabase" ? null : current;
+          });
+        }
+        return;
+      }
+
+      const remoteUserId = session.user.id;
+      const email = session.user.email ?? "";
+      const fallbackName = String(session.user.user_metadata?.name ?? email.split("@")[0] ?? "HydraFlow User");
+      void hydrateCloudAccount(remoteUserId, email, fallbackName);
+    });
 
     return () => {
       cancelled = true;
+      data.subscription.unsubscribe();
     };
-  }, [cloudAuthEnabled, currentUserId]);
+  }, [cloudAuthEnabled, currentAccount?.authProvider]);
 
   useEffect(() => {
     if (!cloudAuthEnabled || !currentAccount?.remoteUserId || currentAccount.authProvider !== "supabase") {
@@ -489,36 +520,56 @@ export default function App() {
 
   async function hydrateCloudAccount(remoteUserId: string, email: string, fallbackName: string) {
     const remoteAccount = await loadRemoteAccount(remoteUserId).catch(() => null);
-    const existing = accounts.find(
+    const persistedExisting = loadState().accounts.find(
       (account) => account.remoteUserId === remoteUserId || sanitizeEmail(account.email) === sanitizeEmail(email),
     );
-    const nextAccount = remoteAccount
-      ? {
-          ...remoteAccount,
-          id: remoteAccount.id || existing?.id || `acct-cloud-${remoteUserId}`,
-          email,
-          name: remoteAccount.name || existing?.name || fallbackName,
-          authProvider: "supabase" as const,
-          remoteUserId,
-        }
-      : existing
+    let nextAccount: AccountRecord | null = null;
+
+    setAccounts((current) => {
+      const existing = current.find(
+        (account) => account.remoteUserId === remoteUserId || sanitizeEmail(account.email) === sanitizeEmail(email),
+      ) ?? persistedExisting;
+
+      nextAccount = remoteAccount
         ? {
-            ...existing,
+            ...remoteAccount,
+            id: remoteAccount.id || existing?.id || `acct-cloud-${remoteUserId}`,
             email,
-            authProvider: "supabase" as const,
-            remoteUserId,
-          }
-        : createAccountRecord({
-            id: `acct-cloud-${remoteUserId}`,
-            name: fallbackName,
-            email,
+            name: remoteAccount.name || existing?.name || fallbackName,
             authProvider: "supabase",
             remoteUserId,
-          });
+          }
+        : existing
+          ? {
+              ...existing,
+              email,
+              authProvider: "supabase",
+              remoteUserId,
+            }
+          : createAccountRecord({
+              id: `acct-cloud-${remoteUserId}`,
+              name: fallbackName,
+              email,
+              authProvider: "supabase",
+              remoteUserId,
+            });
 
-    setAccounts((current) => upsertAccount(current, nextAccount));
-    setCurrentUserId(nextAccount.id);
-    return nextAccount;
+      return upsertAccount(current, nextAccount);
+    });
+
+    if (!nextAccount) {
+      throw new Error("Unable to hydrate the cloud account.");
+    }
+
+    const hydratedAccount = nextAccount as AccountRecord;
+
+    setCurrentUserId(hydratedAccount.id);
+
+    if (!remoteAccount) {
+      await saveRemoteAccount(hydratedAccount).catch(() => undefined);
+    }
+
+    return hydratedAccount;
   }
 
   function updateDraft<Key extends keyof UserProfile>(key: Key, value: UserProfile[Key]) {
