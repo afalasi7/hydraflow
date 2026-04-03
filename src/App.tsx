@@ -1036,11 +1036,10 @@ export default function App() {
     return (
       <section className="landing-shell">
         <div className="panel landing-hero glass-panel">
-          <span className="eyebrow">Catch your flow</span>
-          <h1>HydraFlow turns daily hydration into a futuristic ritual you actually want to keep.</h1>
+          <span className="eyebrow">Hydration, simplified</span>
+          <h1>HydraFlow helps you track water with calm, clear daily focus.</h1>
           <p className="hero-copy">
-            Personalized targets, family-ready profiles, backend-backed accounts, optional cloud sync, and a dashboard that keeps daily hydration
-            obvious.
+            Personalized targets, simple logging, family profiles, and backend-backed accounts that keep your data here.
           </p>
           <div className="hero-actions">
             <button className="cta-button" onClick={() => setAuthMode("signup")} type="button">
@@ -1050,29 +1049,11 @@ export default function App() {
               Log In
             </button>
           </div>
-          <div className="landing-cards">
-            <div className="mini-card">
-              <span>Personal target</span>
-              <strong>Weight + age + climate + activity</strong>
-            </div>
-            <div className="mini-card">
-              <span>Family mode</span>
-              <strong>Multiple profiles under one account</strong>
-            </div>
-            <div className="mini-card">
-              <span>Sync path</span>
-              <strong>{cloudAuthEnabled ? "Supabase auth + cloud state" : "Backend auth + server-stored accounts"}</strong>
-            </div>
-            <div className="mini-card premium-mini-card">
-              <span>Freemium</span>
-              <strong>Family tools, sync, reminders, export, and deeper insight</strong>
-            </div>
-          </div>
         </div>
 
         <div className="panel auth-preview glass-panel">
           <span className="eyebrow">How it works</span>
-          <h2>Start outside the app, then step into a dashboard built for one person or a whole household.</h2>
+          <h2>Start with an account, add the people you track, and keep hydration easy to understand.</h2>
           <ul className="feature-list">
             <li>Create an account and answer a short profile setup.</li>
             <li>Track one profile or a whole household in the same account.</li>
@@ -1369,21 +1350,6 @@ export default function App() {
 
         {renderProfileSwitcher()}
 
-        <div className="family-overview-strip">
-          <div className="mini-card">
-            <span>Selected profile</span>
-            <strong>{activeProfile?.name ?? "Profile"}</strong>
-          </div>
-          <div className="mini-card">
-            <span>Mode</span>
-            <strong>{isKidMode ? "Kid dashboard" : "Standard dashboard"}</strong>
-          </div>
-          <div className="mini-card">
-            <span>Plan</span>
-            <strong>{`${profileCount} of ${maxProfiles} family profiles available`}</strong>
-          </div>
-        </div>
-
         <div className="content-grid">
           <div className="panel spotlight-panel glass-panel">
             <div className="section-heading">
@@ -1534,35 +1500,6 @@ export default function App() {
               )}
             </div>
           </div>
-
-          <div className="panel glass-panel premium-panel">
-            <div className="section-heading">
-              <div>
-                <span className="eyebrow">Freemium</span>
-                <h2>Everything is included in the freemium build</h2>
-              </div>
-              <span className="plan-pill is-freemium">{getPlanLabel()}</span>
-            </div>
-
-            <div className="premium-grid">
-              <div className="mini-card">
-                <span>Family hub</span>
-                <strong>{profileCount} profiles on this account</strong>
-              </div>
-                <div className="mini-card">
-                  <span>Cloud sync</span>
-                  <strong>{currentAccount?.authProvider === "supabase" ? "Connected to Supabase" : "Account stored by the built-in backend"}</strong>
-                </div>
-              <div className="mini-card">
-                <span>Reminders</span>
-                <strong>{reminderSettings.enabled ? `${reminderSettings.times.length} browser nudges active` : "Ready for browser nudges"}</strong>
-              </div>
-              <div className="mini-card">
-                <span>Insights</span>
-                <strong>Streaks, summaries, and full history tools are included</strong>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
     );
@@ -1613,9 +1550,8 @@ export default function App() {
           <div className="section-heading">
             <div>
               <span className="eyebrow">Insights</span>
-              <h2>Weekly freemium readout</h2>
+              <h2>Weekly summary</h2>
             </div>
-            <span className="plan-pill is-freemium">{getPlanLabel()}</span>
           </div>
 
           <div className="premium-grid">
@@ -1655,25 +1591,14 @@ export default function App() {
           <div className="section-heading">
             <div>
               <span className="eyebrow">Settings</span>
-              <h2>Update account, profiles, sync, and included tools</h2>
-            </div>
-          </div>
-
-          <div className="subscription-card">
-            <div className="subscription-copy">
-              <span className="eyebrow">Plan</span>
-              <h3>{getPlanLabel()}</h3>
-              <p>All family profiles, reminders, export, and sync-ready tools are included in this freemium build.</p>
-            </div>
-            <div className="subscription-actions">
-              <span className="plan-pill is-freemium">{getPlanLabel()}</span>
+              <h2>Account and profile settings</h2>
             </div>
           </div>
 
           <div className="family-card glass-subpanel">
             <div className="section-heading">
               <div>
-                <span className="eyebrow">Family hub</span>
+                <span className="eyebrow">Profiles</span>
                 <h3>Profiles on this account</h3>
               </div>
               <span className="subtle-note">
@@ -1701,17 +1626,16 @@ export default function App() {
               <button className="cta-button" onClick={() => setProfileCreatorOpen(true)} type="button">
                 Add family profile
               </button>
-              <span className="subtle-note">You can keep up to {maxProfiles} profiles in the freemium build.</span>
+              <span className="subtle-note">Up to {maxProfiles} profiles.</span>
             </div>
           </div>
 
           <div className="sync-card glass-subpanel">
             <div className="section-heading">
               <div>
-                <span className="eyebrow">Included tools</span>
+                <span className="eyebrow">Tools</span>
                 <h3>Reminders and export</h3>
               </div>
-              <span className="subtle-note">Live</span>
             </div>
             <div className="tool-grid">
               <div className="mini-card">
@@ -1896,8 +1820,8 @@ export default function App() {
           <div className="sync-card glass-subpanel">
             <div className="section-heading">
               <div>
-                <span className="eyebrow">Sync</span>
-                <h3>{cloudAuthEnabled ? "Cloud auth + sync path" : "Backend account storage"}</h3>
+                <span className="eyebrow">Storage</span>
+                <h3>{cloudAuthEnabled ? "Cloud sync" : "Server-backed account"}</h3>
               </div>
               <span className="subtle-note">{cloudAuthEnabled ? currentAccount.authProvider : currentAccount.authProvider}</span>
             </div>
@@ -1924,16 +1848,6 @@ export default function App() {
                       : "Changes save automatically after edits."}
               </span>
             </div>
-          </div>
-
-          <div className="sync-card glass-subpanel">
-            <div className="section-heading">
-              <div>
-                <span className="eyebrow">Freemium</span>
-                <h3>Everything is already included</h3>
-              </div>
-            </div>
-            <p>HydraFlow now runs as a single freemium experience. Family mode, reminders, export, and sync-ready tools are available without upgrades.</p>
           </div>
 
           <div className="settings-footer">
@@ -1996,37 +1910,6 @@ export default function App() {
       </header>
 
       <main className={profile ? "workspace is-ready" : "workspace"}>
-        <aside className="desktop-rail glass-panel">
-          <span className="eyebrow">Mission control</span>
-          <h2>
-            {!isAuthenticated
-              ? "Landing first. Dashboard after account setup."
-              : needsOnboarding
-                ? "Answer a few questions to unlock the current profile."
-                : "Your hydration rhythm is live."}
-          </h2>
-          <p>
-            A playful cockpit for visitors, account creation, family profile onboarding, optional sync, and a dashboard
-            that keeps daily intake obvious.
-          </p>
-          <div className="rail-card">
-            <span>Flow</span>
-            <strong>Landing → Account → Profiles → Dashboard</strong>
-          </div>
-          <div className="rail-card">
-            <span>Selected profile</span>
-            <strong>{activeProfile?.name ?? "Not selected"}</strong>
-          </div>
-          <div className="rail-card">
-            <span>Progress today</span>
-            <strong>{formatDisplayAmount(todayProgressMl, "dual")}</strong>
-          </div>
-          <div className="rail-card premium-rail-card">
-            <span>Plan</span>
-            <strong>{getPlanLabel()}</strong>
-          </div>
-        </aside>
-
         <div className="main-pane">
           {!isAuthenticated && authMode === "landing" ? renderLanding() : null}
           {!isAuthenticated && (authMode === "login" || authMode === "signup") ? renderAuthCard() : null}
